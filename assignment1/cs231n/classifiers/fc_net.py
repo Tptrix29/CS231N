@@ -55,7 +55,11 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        self.params['W1'] = np.random.normal(0, weight_scale, (input_dim, hidden_dim))
+        self.params['W2'] = np.random.normal(0, weight_scale, (hidden_dim, num_classes))
+        self.params['b1'] = np.zeros(hidden_dim)
+        self.params['b2'] = np.zeros(num_classes)
+                    
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -88,8 +92,14 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
+        caches = []
+        out, cache = affine_forward(X, self.params['W1'], self.params['b1'])
+        caches.append(cache)
+        out, cache = relu_forward(out)
+        caches.append(cache)
+        scores, cache = affine_forward(out, self.params['W2'], self.params['b2'])
+        caches.append(cache)
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -112,7 +122,15 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, dout = softmax_loss(scores, y)
+        for k, param in self.params.items():
+            if k.startswith('W'):
+                loss += 0.5 * self.reg * np.sum(param * param)
+        dout, grads['W2'], grads['b2'] = affine_backward(dout, caches.pop())
+        grads['W2'] += self.reg * self.params['W2']
+        dout = relu_backward(dout, caches.pop())
+        dout, dout, grads['W1'], grads['b1'] = affine_backward(dout, caches.pop())
+        grads['W1'] += self.reg * self.params['W1']
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

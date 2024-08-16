@@ -74,7 +74,20 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        for i in range(self.num_layers):
+            if i == 0:
+                self.params[f"W{i+1}"] = np.random.randn(input_dim, hidden_dims[i]) * weight_scale
+                self.params[f"b{i+1}"] = np.zeros(hidden_dims[i])
+            elif i == self.num_layers - 1:
+                self.params[f"W{i+1}"] = np.random.randn(hidden_dims[i-1], num_classes) * weight_scale
+                self.params[f"b{i+1}"] = np.zeros(num_classes)
+            else:
+                self.params[f"W{i+1}"] = np.random.randn(hidden_dims[i-1], hidden_dims[i]) * weight_scale
+                self.params[f"b{i+1}"] = np.zeros(hidden_dims[i])
+            if self.normalization in ["batchnorm", "layernorm"] and i != self.num_layers - 1:
+                self.params[f"gamma{i+1}"] = np.ones(hidden_dims[i])
+                self.params[f"beta{i+1}"] = np.zeros(hidden_dims[i])
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -148,7 +161,35 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        caches = []
+        out = X
+        for i in range(self.num_layers):
+            # affine - [batch/layer norm] - relu - [dropout]
+            # affine
+            W = self.params[f"W{i+1}"]
+            b = self.params[f"b{i+1}"]
+            out, cache = affine_forward(out, W, b)
+            caches.append(cache)
+            if i != self.num_layers - 1:
+                # [batch/layer norm]
+                if self.normalization in ["batchnorm", "layernorm"]:
+                    gamma = self.params[f"gamma{i+1}"]
+                    beta = self.params[f"beta{i+1}"]
+                    if self.normalization == "batchnorm":
+                        out, cache = batchnorm_forward(out, gamma, beta, self.bn_params[i])
+                    elif self.normalization == "layernorm":
+                        out, cache = layernorm_forward(out, gamma, beta, self.bn_params[i])
+                    else:
+                        raise ValueError("Invalid normalization type")
+                    caches.append(cache)
+                # relu
+                out, cache = relu_forward(out)
+                caches.append(cache)
+                # [dropout]
+                if self.use_dropout:
+                    out, cache = dropout_forward(out, self.dropout_param)
+                    caches.append(cache)
+        scores = out
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -175,7 +216,31 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, dout = softmax_loss(scores, y)
+        for i in range(self.num_layers):
+            W = self.params[f"W{i+1}"]
+            loss += 0.5 * self.reg * np.sum(W ** 2)
+        for i in range(self.num_layers, 0, -1):
+            if i != self.num_layers:
+                # [dropout]
+                if self.use_dropout:
+                    dout = dropout_backward(dout, caches.pop())
+                # relu
+                dout = relu_backward(dout, caches.pop())
+                # [batch/layer norm]
+                if self.normalization in ["batchnorm", "layernorm"]:
+                    if self.normalization == "batchnorm":
+                        dout, dgamma, dbeta = batchnorm_backward(dout, caches.pop())
+                    elif self.normalization == "layernorm":
+                        dout, dgamma, dbeta = layernorm_backward(dout, caches.pop())
+                    else:
+                        raise ValueError("Invalid normalization type")
+                    grads[f"gamma{i}"] = dgamma
+                    grads[f"beta{i}"] = dbeta
+            # affine
+            dout, dW, db = affine_backward(dout, caches.pop())
+            grads[f"W{i}"] = dW + self.reg * self.params[f"W{i}"]
+            grads[f"b{i}"] = db
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

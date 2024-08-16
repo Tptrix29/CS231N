@@ -38,7 +38,10 @@ class PositionalEncoding(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        idx = torch.repeat_interleave(torch.arange(0, embed_dim, 2), repeats=2) + pe
+        odd_mask = torch.arange(0, embed_dim) % 2
+        pe = 1e4 ** (-idx / embed_dim) * torch.arange(max_len).view(-1, 1)
+        pe = odd_mask * torch.cos(pe) + (1 - odd_mask) * torch.sin(pe)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -70,7 +73,7 @@ class PositionalEncoding(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        output = self.dropout(x + self.pe[:, :S, :])
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -165,7 +168,30 @@ class MultiHeadAttention(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # query = self.query(query).view(N, S, self.n_head, self.head_dim).permute(0, 2, 1, 3)
+        # key = self.key(key).view(N, T, self.n_head, self.head_dim).permute(0, 2, 1, 3)
+        # value = self.value(value).view(N, T, self.n_head, self.head_dim).permute(0, 2, 1, 3)
+        #
+        # attn = torch.matmul(query, key.permute(0, 1, 3, 2)) / math.sqrt(self.head_dim)
+        # if attn_mask is not None:
+        #     attn = attn.masked_fill(attn_mask == 0, float('-inf'))
+        # attn = F.softmax(attn, dim=-1)
+        # attn = self.attn_drop(attn)
+        # output = torch.matmul(attn, value).permute(0, 2, 1, 3).reshape(N, S, E)
+        #
+        # output = self.proj(output)
+
+        query = self.query(query).view(N, S, self.n_head, self.head_dim)
+        key = self.key(key).view(N, T, self.n_head, self.head_dim)
+        value = self.value(value).view(N, T, self.n_head, self.head_dim)
+        # (N, S, H, E/H), (N, T, H, E/H) -> (N, H, S, T)
+        attn = torch.einsum("NSHE, NTHE -> NHST", query, key) / math.sqrt(self.head_dim)
+        if attn_mask is not None:
+            attn = attn.masked_fill(attn_mask.view(1, 1, S, T) == 0, float('-inf'))
+        attn = self.attn_drop(F.softmax(attn, dim=-1))
+        # (N, H, S, T), (N, T, H, E/H) -> (N, H, S, E/H) -> (N, S, E)
+        output = torch.einsum("NHST, NTHE -> NHSE", attn, value).permute(0, 2, 1, 3).reshape(N, S, E)
+        output = self.proj(output)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
